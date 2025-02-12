@@ -1,22 +1,21 @@
-#version 430 compatibility
-
-#include "/lib/voxel.glsl"
+#version 460 compatibility
 
 uniform sampler2D lightmap;
-uniform sampler2D texture;
+uniform sampler2D gtexture;
 uniform vec4 entityColor;
 
-varying vec2 lmcoord;
-varying vec2 texcoord;
-varying vec4 glcolor;
-varying vec3 Normal;
+in vec2 lmcoord;
+in vec2 texcoord;
+in vec4 glcolor;
+
+/* DRAWBUFFERS:0 */
+layout(location = 0) out vec4 color;
 
 void main() {
-	vec4 col = texture2D(texture, texcoord) * glcolor;
-	col.rgb = mix(col.rgb, entityColor.rgb, entityColor.a);
-	col = pow(col, vec4(vec3(GAMMA), 1.0));
-
-/* DRAWBUFFERS:02 */
-	gl_FragData[0] = col;
-	gl_FragData[1] = vec4(Normal * 0.5 + 0.5, 1.0);
+	color = texture(gtexture, texcoord) * glcolor;
+	color.rgb = mix(color.rgb, entityColor.rgb, entityColor.a);
+	color *= texture(lightmap, lmcoord);
+	if (color.a < 0.1) {
+		discard;
+	}
 }

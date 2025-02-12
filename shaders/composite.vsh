@@ -1,10 +1,8 @@
-#version 120
+#version 460 compatibility
 
-varying vec2 TexCoords;
-varying vec3 viewPos;
+out vec2 texcoords;
 
 void main() {
-   gl_Position = ftransform();
-   viewPos = gl_Vertex.xyz;
-   TexCoords = gl_MultiTexCoord0.st;
+	gl_Position = ftransform();
+    texcoords = gl_MultiTexCoord0.st;
 }

@@ -1,22 +1,19 @@
-#version 120
+#version 460 compatibility
 
 uniform sampler2D lightmap;
-uniform sampler2D texture;
-uniform sampler2D specular;
+uniform sampler2D gtexture;
 
-varying vec2 lmcoord;
-varying vec2 texcoord;
-varying vec4 glcolor;
-varying vec3 Normal;
+in vec2 lmcoord;
+in vec2 texcoord;
+in vec4 glcolor;
 
-#include "/lib/utils.glsl"
+/* DRAWBUFFERS:0 */
+layout(location = 0) out vec4 color;
 
 void main() {
-	vec4 color = texture2D(texture, texcoord) * glcolor;
-
-	/* DRAWBUFFERS:0259 */
-	gl_FragData[0] = pow(color, vec4(vec3(GAMMA), 1.0));
-	gl_FragData[1] = vec4(Normal * 0.5 + 0.5, 1.0);
-	gl_FragData[2] = color;
-	gl_FragData[3] = texture2D(specular, texcoord);
+	color = texture(gtexture, texcoord) * glcolor;
+	color *= texture(lightmap, lmcoord);
+	if (color.a < 0.1) {
+		discard;
+	}
 }

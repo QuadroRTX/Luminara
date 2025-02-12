@@ -1,34 +1,78 @@
-vec4 quaternionMultiply(vec4 a, vec4 b) {
-    return vec4(
-        a.x * b.w + a.y * b.z - a.z * b.y + a.w * b.x,
-        -a.x * b.z + a.y * b.w + a.z * b.x + a.w * b.y,
-        a.x * b.y - a.y * b.x + a.z * b.w + a.w * b.z,
-        -a.x * b.x - a.y * b.y - a.z * b.z + a.w * b.w
-    );
+vec3 n_min (vec3 r) {
+    return (1.0 - r) / (1.0 + r);
 }
 
-vec3 quaternionRotate(vec3 pos, vec3 axis, float angle) {
-    vec4 q = vec4(sin(angle / 2.0) * axis, cos(angle / 2.0));
-    vec4 qInv = vec4(-q.xyz, q.w);
-    return quaternionMultiply(quaternionMultiply(q, vec4(pos, 0)), qInv).xyz;
+vec3 n_max (vec3 r) {
+    return (1.0 + sqrt(r)) / (1.0 - sqrt(r));
 }
 
-vec3 quaternionRotate(vec3 pos, vec4 q) {
-    vec4 qInv = vec4(-q.xyz, q.w);
-    return quaternionMultiply(quaternionMultiply(q, vec4(pos, 0)), qInv).xyz;
+vec3 get_n (vec3 r, vec3 g) {
+    return n_min(r) * g + (1.0 - g) * n_max(r);
 }
 
-vec4 getRotationToZAxis(vec3 vec) {
-
-	// Handle special case when input is exact or near opposite of (0, 0, 1)
-	if (vec.z < -0.99999f) return vec4(1.0f, 0.0f, 0.0f, 0.0f);
-
-	return normalize(vec4(vec.y, -vec.x, 0.0f, 1.0f + vec.z));
+vec3 get_k2 (vec3 r, vec3 n) {
+    vec3 nr = (n + 1.0) * (n + 1.0) * r - (n - 1.0) * (n - 1.0);
+    return nr / (1.0 - r);
 }
 
-vec3 fresnelSchlick(vec3 F0, float cosTheta) {
-    return F0 + (1.0 - F0) * pow((1.0 - cosTheta), 5.0);
+vec3 get_r (vec3 n, vec3 k) {
+    return ((n - 1.0) * (n - 1.0) + k * k) / ((n + 1.0) * (n + 1.0) + k * k);
 }
+
+vec3 get_g (vec3 n, vec3 k) {
+    vec3 r = get_r(n, k);
+    return (n_max(r) - n) / (n_max(r) - n_min(r));
+}
+
+float f0toior (float F0) {
+    return (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));
+}
+
+float iortof0 (float ior) {
+    float a = (ior - 1.0) / (ior + 1.0);
+    return a * a;
+}
+
+vec3 fresnelschlick (vec3 F0, float c) {
+    return F0 + (1.0 - F0) * pow((1.0 - c), 5.0);
+}
+
+vec3 fresnel (vec3 r, vec3 g, float c) {
+    if (r == vec3(1.0)) return vec3(1.0);
+    vec3 r2 = clamp(r, 0.0, 0.999999);
+    
+    vec3 n = get_n(r2, g);
+    vec3 k2 = get_k2(r2, n);
+    //vec3 n = vec3(0.18299, 0.42108, 1.3734);
+    //vec3 k2 = vec3(3.4242, 2.3459, 1.7704);
+    
+    vec3 rs_num = n * n + k2 - 2.0 * n * c + c * c;
+    vec3 rs_den = n * n + k2 + 2.0 * n * c + c * c;
+    vec3 rs = rs_num / rs_den;
+    
+    vec3 rp_num = (n * n + k2) * c * c - 2.0 * n * c + 1.0;
+    vec3 rp_den = (n * n + k2) * c * c + 2.0 * n * c + 1.0;
+    vec3 rp = rp_num / rp_den;
+    
+    return (rp + rs) / 2.0;
+}
+
+vec3 fresnelnk (vec3 n, vec3 k2, float c) {
+    vec3 rs_num = n * n + k2 - 2.0 * n * c + c * c;
+    vec3 rs_den = n * n + k2 + 2.0 * n * c + c * c;
+    vec3 rs = rs_num / rs_den;
+    
+    vec3 rp_num = (n * n + k2) * c * c - 2.0 * n * c + 1.0;
+    vec3 rp_den = (n * n + k2) * c * c + 2.0 * n * c + 1.0;
+    vec3 rp = rp_num / rp_den;
+    
+    return (rp + rs) / 2.0;
+}
+
+vec3 fresnel (vec3 F0, float c) {
+    return fresnel(F0, mix(F0, vec3(1.0), 82.0 / 90.0), c);
+}
+
 float distributionGGX(vec3 v, float alpha) {
     float alpha2 = alpha * alpha;
     return 1.0 / (pi * alpha2 * pow(v.x * v.x / alpha2 + v.y * v.y / alpha2 + v.z * v.z , 2.0));
@@ -43,27 +87,20 @@ float smithUncorrelatedGeometry(vec3 V, vec3 L, float roughness) {
     return smithShadowing(V, roughness) * smithShadowing(L, roughness);
 }
 
-vec3 sampleGGXVNDF(vec3 Ve, vec2 alpha2D, vec2 u) {
-	vec3 Vh = normalize(vec3(alpha2D.x * Ve.x, alpha2D.y * Ve.y, Ve.z));
+vec3 sampleGGXVNDF(vec3 viewDirection, vec2 alpha, vec2 xi) {
+    viewDirection = normalize(vec3(alpha * viewDirection.xy, viewDirection.z));
 
-	float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-	vec3 T1 = lensq > 0.0f ? vec3(-Vh.y, Vh.x, 0.0f) * inversesqrt(lensq) : vec3(1.0f, 0.0f, 0.0f);
-	vec3 T2 = cross(Vh, T1);
+    float phi       = 2.0 * pi * xi.x;
+    float cosTheta  = (1.0 - xi.y) * (1.0 + viewDirection.z) - viewDirection.z;
+    float sinTheta  = sqrt(clamp(1.0 - cosTheta * cosTheta, 0.0, 1.0));
+    vec3  reflected = vec3(vec2(cos(phi), sin(phi)) * sinTheta, cosTheta);
 
-	float r = sqrt(u.x);
-	float phi = 2.0 * pi * u.y;
-	float t1 = r * cos(phi);
-	float t2 = r * sin(phi);
-	float s = 0.5f * (1.0f + Vh.z);
-	t2 = mix(sqrt(1.0f - t1 * t1), t2, s);
+    vec3 halfway = reflected + viewDirection;
 
-	vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
-
-	return normalize(vec3(alpha2D.x * Nh.x, alpha2D.y * Nh.y, max(0.0f, Nh.z)));
+    return normalize(vec3(alpha * halfway.xy, halfway.z));
 }
 
 vec3 brdf (vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 view, vec3 light) {
-    return vec3(max(dot(light, normal), 0.0) / pi);
     vec4 q = getRotationToZAxis(normal);
     vec3 V = quaternionRotate(view, q);
     vec3 L = quaternionRotate(light, q);
@@ -71,42 +108,251 @@ vec3 brdf (vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 view, 
     
     float HdotV = clamp(dot(H, V), 0.0, 1.0);
     float NdotH = clamp(H.z, 0.0, 1.0);
+
+    vec3 n = vec3(0.0);
+    vec3 k = vec3(0.0);
+
+    int metalID = int(F0.r * 255.0 - 229.5);
+
+    switch(metalID) {
+        case 0: {
+            n = vec3(2.9114, 2.9497, 2.5845);
+            k = vec3(3.0893, 2.9318, 2.7670);
+            metal = 1.0;
+            break;
+        }
+        case 1: {
+            n = vec3(0.18299, 0.42108, 1.3734);
+            k = vec3(3.4242, 2.3459, 1.7704);
+            metal = 1.0;
+            break;
+        }
+        case 2: {
+            n = vec3(1.3456, 0.96521, 0.61722);
+            k = vec3(7.4746, 6.3995, 5.3031);
+            metal = 1.0;
+            break;
+        }
+        case 3: {
+            n = vec3(3.1071, 3.1812, 2.3230);
+            k = vec3(3.3314, 3.3291, 3.1350);
+            metal = 1.0;
+            break;
+        }
+        case 4: {
+            n = vec3(0.27105, 0.67693, 1.3164);
+            k = vec3(3.6092, 2.6248, 2.2921);
+            metal = 1.0;
+            break;
+        }
+        case 5: {
+            n = vec3(1.9100, 1.8300, 1.4400);
+            k = vec3(3.5100, 3.4000, 3.1800);
+            metal = 1.0;
+            break;
+        }
+        case 6: {
+            n = vec3(2.3757, 2.0847, 1.8453);
+            k = vec3(4.2655, 3.7153, 3.1365);
+            metal = 1.0;
+            break;
+        }
+        case 7: {
+            n = vec3(0.15943, 0.14512, 0.13547);
+            k = vec3(3.9291, 3.1900, 2.3808);
+            metal = 1.0;
+            break;
+        }
+    }
+
+    vec3 F = metal == 1.0 ? fresnelnk(n, k, max(dot(H, V), 0.0)) : fresnel(F0, max(dot(H, V), 0.0));
+
+    #if ALBEDO_METALS == 1
+        if (metalID >= 0) {
+            metal = 1.0;
+            F = fresnelschlick(alb, max(dot(H, V), 0.0));
+        }
+    #endif
+
+    #if GOLDEN_WORLD == 1
+        F = fresnelnk(vec3(0.18299, 0.42108, 1.3734), vec3(3.4242, 2.3459, 1.7704), max(dot(H, V), 0.0));
+        metal = 1.0;
+    #endif
     
-    vec3 F = fresnelSchlick(F0, HdotV);
     float D = distributionGGX(H, rough);
     float G = smithUncorrelatedGeometry(V, L, rough);
     
     vec3 spec = F * D * G / max(4.0 * V.z * L.z, 0.001);
 
-    return ((1.0 - metal) * (1.0 - fresnelSchlick(F0, max(L.z, 0.0))) * (1.0 - fresnelSchlick(F0, max(dot(normal, view), 0.0))) * alb / pi + spec) * max(L.z, 0.0);
+    if (rough == 0.0) return (1.0 - metal) * (1.0 - F) * alb / pi * max(L.z, 0.0);
+    return ((1.0 - metal) * (1.0 - F) * alb / pi + spec) * max(L.z, 0.0);
 }
 
-vec3 sampleSpecular(vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 view, out vec3 brdf) {
-    brdf = vec3(0.5);
-    return reflect(-view, normal);
+float ggxh(float Xi, vec3 direction, float height, float alpha) {
+    float direction_length = length(vec3(direction.xy * alpha, 1.0));
+    float delta = -log(1.0f - Xi) * direction.z / max(0.5 * (direction_length - direction.z), 1e-6);
+
+    return height + delta;
+}
+
+#define ALBEDO_METALS 0 //unbelievably cringe, do not turn this on [0 1]
+
+vec3 sampleSpecularBasis (vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 view, inout vec3 through, out bool doSpec) {
     vec4 q = getRotationToZAxis(normal);
-    vec3 V = quaternionRotate(view, q);
-    vec3 M = sampleGGXVNDF(V, vec2(rough), vec2(randF(), randF()));
-    vec3 L = reflect(-V, M);
-    vec3 H = normalize(V + L);
+    vec3 V = view;
+    vec3 H = sampleGGXVNDF(V, vec2(rough), rand2F());
+    vec3 L = reflect(-V, H);
 
+    vec3 n = vec3(0.0);
+    vec3 k = vec3(0.0);
 
-    vec3 F = fresnelSchlick(F0, max(dot(H, V), 0.0));
-    float G2 = smithUncorrelatedGeometry(V, L, rough);
-    float G1 = smithShadowing(V, rough);
-    brdf = F * G2 / G1;
+    int metalID = int(F0.r * 255.0 - 229.5);
+
+    switch(metalID) {
+        case 0: {
+            n = vec3(2.9114, 2.9497, 2.5845);
+            k = vec3(3.0893, 2.9318, 2.7670);
+            metal = 1.0;
+            break;
+        }
+        case 1: {
+            n = vec3(0.18299, 0.42108, 1.3734);
+            k = vec3(3.4242, 2.3459, 1.7704);
+            metal = 1.0;
+            break;
+        }
+        case 2: {
+            n = vec3(1.3456, 0.96521, 0.61722);
+            k = vec3(7.4746, 6.3995, 5.3031);
+            metal = 1.0;
+            break;
+        }
+        case 3: {
+            n = vec3(3.1071, 3.1812, 2.3230);
+            k = vec3(3.3314, 3.3291, 3.1350);
+            metal = 1.0;
+            break;
+        }
+        case 4: {
+            n = vec3(0.27105, 0.67693, 1.3164);
+            k = vec3(3.6092, 2.6248, 2.2921);
+            metal = 1.0;
+            break;
+        }
+        case 5: {
+            n = vec3(1.9100, 1.8300, 1.4400);
+            k = vec3(3.5100, 3.4000, 3.1800);
+            metal = 1.0;
+            break;
+        }
+        case 6: {
+            n = vec3(2.3757, 2.0847, 1.8453);
+            k = vec3(4.2655, 3.7153, 3.1365);
+            metal = 1.0;
+            break;
+        }
+        case 7: {
+            n = vec3(0.15943, 0.14512, 0.13547);
+            k = vec3(3.9291, 3.1900, 2.3808);
+            metal = 1.0;
+            break;
+        }
+    }
+
+    vec3 F = metal == 1.0 ? fresnelnk(n, k, max(dot(H, V), 0.0)) : fresnel(F0, max(dot(H, V), 0.0));
+
+    #if ALBEDO_METALS == 1
+        if (metalID >= 0) {
+            metal = 1.0;
+            F = fresnelschlick(alb, max(dot(H, V), 0.0));
+        }
+    #endif
+
+    #if GOLDEN_WORLD == 1
+        F = fresnelnk(vec3(0.18299, 0.42108, 1.3734), vec3(3.4242, 2.3459, 1.7704), max(dot(H, V), 0.0));
+        metal = 1.0;
+    #endif
     
-    vec3 specdir = quaternionRotate(L, vec4(-q.xyz, q.w));
-    vec3 diffusedir = normalize(normal + randDir(rand2F()));
+    vec3 specdir = L;
+    vec3 diffusedir = normalize(quaternionRotate(normal, q) + randV());
     
+    float albchance = (1.0 - metal) * (1.0 - dot(F, vec3(1.0 / 3.0)));
     float specchance = dot(F, vec3(1.0 / 3.0));
-    if (randF() <= specchance) {
-        brdf /= specchance;
+
+    if (metal == 1.0) {
+        through *= F;
+        doSpec = true;
+        return specdir;
+    } else if (randF() <= specchance) {
+        through *= F;
+        through /= specchance;
+        doSpec = true;
         return specdir;
     } else {
-        brdf = (1.0 - metal) * (1.0 - fresnelSchlick(F0, max(dot(diffusedir, normal), 0.0))) * (1.0 - fresnelSchlick(F0, max(dot(view, normal), 0.0))) * alb / (1.0 - specchance);
+        through *= (1.0 - metal) * (1.0 - F) * alb / (1.0 - specchance);
+        doSpec = false;
         return diffusedir;
     }
     
     return specdir;
+}
+
+vec3 sampleSpecular (vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 view, inout vec3 through, out bool doSpec) {
+    vec3 r = F0;
+    vec3 g = mix(F0, vec3(1.0), 82.0 / 90.0);
+
+    vec4 q = getRotationToZAxis(normal);
+    vec3 V = quaternionRotate(view, q);
+    
+    int MS = 64;
+    vec3 wr = -V;
+    float hr = 0.0;
+ 
+    int i = 0;
+    
+    while (i <= MS) {
+        hr = ggxh(randF(), wr, hr, rough);
+        
+        if(hr > 0.0)
+            break;
+        else
+            i++;
+        
+        wr = sampleSpecularBasis(alb, rough, metal, F0, normal, -wr, through, doSpec);
+        if(hr != hr || wr.z != wr.z)
+            return vec3(0.0, 0.0, 1.0);
+    }
+    
+    through = max(through, 0.0);
+    
+    return quaternionRotate(wr, vec4(-q.xyz, q.w));
+}
+
+vec3 sampleSpecular (vec3 alb, float rough, float metal, vec3 F0, vec3 normal, vec3 realnormal, vec3 view, inout vec3 through, out bool doSpec) {
+    vec4 q = getRotationToZAxis(normal);
+    vec3 V = quaternionRotate(view, q);
+    vec3 N = quaternionRotate(realnormal, q);
+    
+    int MS = 64;
+    vec3 wr = -V;
+    float hr = 0.0;
+ 
+    int i = 0;
+    
+    while (i <= MS) {
+        hr = ggxh(randF(), wr, hr, rough);
+        
+        if(hr > 0.0 && dot(N, wr) > 0.0)
+            break;
+        else
+            i++;
+        
+        wr = sampleSpecularBasis(alb, rough, metal, F0, normal, -wr, through, doSpec);
+        if(hr != hr || wr.z != wr.z)
+            return reflect(-view, normal);
+    }
+
+    through = max(through, 0.0);
+    
+    return quaternionRotate(wr, vec4(-q.xyz, q.w));
 }

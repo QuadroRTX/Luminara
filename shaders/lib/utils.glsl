@@ -1,83 +1,33 @@
+const float pi = 3.14159265358979323;
+
+uniform vec3 cameraPosition;
+uniform vec3 previousCameraPosition;
 uniform sampler2D colortex0;
 uniform sampler2D colortex1;
 uniform sampler2D colortex2;
 uniform sampler2D colortex3;
 uniform sampler2D colortex4;
-uniform sampler2D colortex5;
-uniform sampler2D colortex6;
-uniform sampler2D colortex7;
-uniform sampler2D colortex8;
-uniform sampler2D colortex9;
-uniform sampler2D colortex10;
-uniform sampler2D noisetex;
-uniform sampler2D depthtex0;
-uniform sampler2D depthtex1;
-uniform sampler2D depthtex2;
 uniform int frameCounter;
-uniform float viewWidth;
 uniform float viewHeight;
-uniform float worldTime;
-uniform ivec2 atlasSize;
-uniform int isEyeInWater; 
-uniform vec3 skyColor;
-
-#define AMBIENT 0.0 //bruh please dont turn this up [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50]
-#define BOUNCES 10 //Amount of path tracing bounces [0 1 2 3 4 5 6 7 8 9 10 20 50 100 1000]
-#define REPROJECT 1
-#define NORMAL 2
-#define NONE 3
-#define ACCUM REPROJECT //Type of accumulation [REPROJECT NORMAL NONE]
-#define REPROJECTFRAMES 10 //Amount of frames to accumulate with reprojection [2 3 4 5 6 7 8 9 10 15 20 30 60]
-#define CHEATS //Glowing ores
-#define DEPTHREJECT 1.0 //Maximum value of depth change before rejecting reproject sample [0.1 0.2 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0 7.0 8.0 9.0 10.0]
-#define SUNR 0.95 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define SUNG 0.90 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define SUNB 0.60 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define MOONR 0.30 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define MOONG 0.50 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define MOONB 1.0 //Sun red value [0.0 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.0]
-#define SUNROT -20.0 //Sun's rotation [-45.0 -40.0 -35.0 -30.0 -25.0 -20.0 -15.0 -10.0 -5.0 0.0 5.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0 45.0]
-#define GAMMA 3.0 //Gamma value for color correction [1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 3.2 3.4 3.6 3.8 4.0]
-#define CAUSTICS //chill no its not water caustics just sun bounce off mirrors
-#define BOUNCELENGTH 50 //how far a ray can travel [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100]
-#define EXPOSURE 0.8 //manual exposure multiplier [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 5.0 10.0 25.0 50.0 75.0 100.0 250.0 500.0 750.0 1000.0]
-uniform mat4 gbufferProjectionInverse;
+uniform float viewWidth;
 uniform mat4 gbufferModelView;
-uniform mat4 gbufferPreviousModelView;
-uniform mat4 gbufferPreviousProjection;
-uniform vec3 previousCameraPosition; 
 uniform mat4 gbufferModelViewInverse;
-uniform vec3 cameraPosition;
-uniform float near;
-uniform float far;
+uniform mat4 gbufferProjection;
+uniform mat4 gbufferProjectionInverse;
 vec3 eyeCameraPosition = cameraPosition + gbufferModelViewInverse[3].xyz;
 
-const float pi = 3.14159265358979323;
-
-vec4 QuaternionMultiply(vec4 a, vec4 b) {
-    return vec4(
-        a.x * b.w + a.y * b.z - a.z * b.y + a.w * b.x,
-        -a.x * b.z + a.y * b.w + a.z * b.x + a.w * b.y,
-        a.x * b.y - a.y * b.x + a.z * b.w + a.w * b.z,
-        -a.x * b.x - a.y * b.y - a.z * b.z + a.w * b.w
-    );
-}
-
-vec3 Rotate(vec3 vec, vec3 from, vec3 to) {
-    vec3 halfway = normalize(from + to);
-    vec4 quat = vec4(cross(from, halfway), dot(from, halfway));
-    vec4 qInv = vec4(-quat.xyz, quat.w);
-    return QuaternionMultiply(QuaternionMultiply(quat, vec4(vec, 0)), qInv).xyz;
-}
-
-float linearizeDepthFast(float depth) {
-    return (near * far) / (depth * (near - far) + far);
-}
-
-vec3 proj(mat4 projectionMatrix, vec3 pos) {
-    vec4 homoPos = projectionMatrix * vec4(pos, 1.0);
-    return homoPos.xyz / homoPos.w;
-}
+#define SUNROT -40.0 //Sun's rotation [-45.0 -40.0 -35.0 -30.0 -25.0 -20.0 -15.0 -10.0 -5.0 0.0 5.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0 45.0]
+#define GAMMA 2.2 //Gamma value for color correction [1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 3.2 3.4 3.6 3.8 4.0]
+#define EXPOSURE 0.8 //manual exposure multiplier [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.1 3.2 3.3 3.4 3.5 3.6 3.7 3.8 3.9 4.0 4.1 4.2 4.3 4.4 4.5 4.6 4.7 4.8 4.9 5.0 5.5 6.0 6.5 7.0 7.5 8.0 8.5 9.0 9.5 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 30.0 35.0 40.0 45.0 50.0 55.0 60.0 65.0 70.0 75.0 80.0 85.0 90.0 95.0 100.0 250.0 500.0 750.0 1000.0]
+#define GLOWING_ORES //Glowing ores
+#define BOUNCES 5 //Amount of path tracing bounces [0 1 2 3 4 5 6 7 8 9 10 20 50 100 1000]
+#define SUN_NEE
+#define RUSSIAN_ROULETTE
+#define TEXTURE_SIZE 16 //Texturesize [1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192 16384]
+#define HARDCODED_EMISSIVE 0 //hardcoded emissive [0 1]
+#define GOLDEN_WORLD 0 //golden world [0 1]
+#define ALBEDO_METALS 0 //albedo metals [0 1]
+#define GLASS_BORDER 0 //borders around glass [0 1]
 
 vec3 tone(vec3 color){	
 	mat3 m1 = mat3(
@@ -94,6 +44,90 @@ vec3 tone(vec3 color){
 	vec3 a = v * (v + 0.0245786) - 0.000090537;
 	vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
 	return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / GAMMA));	
+}
+
+vec4 quaternionMultiply (vec4 a, vec4 b) {
+    return vec4(
+        a.x * b.w + a.y * b.z - a.z * b.y + a.w * b.x,
+        -a.x * b.z + a.y * b.w + a.z * b.x + a.w * b.y,
+        a.x * b.y - a.y * b.x + a.z * b.w + a.w * b.z,
+        -a.x * b.x - a.y * b.y - a.z * b.z + a.w * b.w
+    );
+}
+
+vec3 quaternionRotate (vec3 pos, vec4 q) {
+    vec4 qInv = vec4(-q.xyz, q.w);
+    return quaternionMultiply(quaternionMultiply(q, vec4(pos, 0)), qInv).xyz;
+}
+
+vec4 getRotationToZAxis (vec3 vec) {
+	if (vec.z < -0.99999) return vec4(1.0, 0.0, 0.0, 0.0);
+
+	return normalize(vec4(vec.y, -vec.x, 0.0, 1.0 + vec.z));
+}
+
+vec3 rotate(vec3 vec, vec3 from, vec3 to) {
+    vec3 halfway = normalize(from + to);
+    vec4 quat = vec4(cross(from, halfway), dot(from, halfway));
+    vec4 qInv = vec4(-quat.xyz, quat.w);
+    return quaternionMultiply(quaternionMultiply(quat, vec4(vec, 0)), qInv).xyz;
+}
+
+vec3 emissivecol (int id) {
+    vec3 emissive;
+    if (id == 3) emissive = vec3(0.95, 0.6, 0.25);
+    if (id == 4) emissive = vec3(0.7, 0.9, 1.0);
+    if (id == 5) emissive = vec3(1.0, 0.6, 0.2);
+    if (id == 6) emissive = vec3(1.0, 0.6, 0.2);
+    if (id == 10) emissive = vec3(0.7, 0.2, 1.0);
+    if (id == 16) emissive = vec3(1.0, 0.8, 0.3);
+    if (id == 17) emissive = vec3(0.9, 0.8, 1.0);
+    #ifdef GLOWING_ORES
+    if (id == 8) emissive = vec3(0.2, 0.7, 1.0);
+    if (id == 9) emissive = vec3(1.0, 0.7, 0.4);
+    if (id == 11) emissive = vec3(0.3, 1.0, 0.3);
+    if (id == 12) emissive = vec3(1.0, 0.0, 0.0);
+    if (id == 13) emissive = vec3(1.0, 1.0, 1.0);
+    if (id == 14) emissive = vec3(1.0, 0.8, 0.1);
+    if (id == 15) emissive = vec3(0.2, 0.4, 1.0);
+    if (id == 16) emissive = vec3(1.0, 0.6, 0.2);
+    #endif
+    return pow(emissive, vec3(GAMMA));
+}
+
+float emissivebright (int id) {
+    float emissive;
+    if (id == 3) emissive = 1.0;
+    if (id == 4) emissive = 1.0;
+    if (id == 5) emissive = 1.0;
+    if (id == 6) emissive = 1.0;
+    if (id == 10) emissive = 50.0;
+    if (id == 16) emissive = 1.0;
+    if (id == 17) emissive = 1.0;
+    #ifdef GLOWING_ORES
+    if (id == 8) emissive = 1000.0;
+    if (id == 9) emissive = 1000.0;
+    if (id == 11) emissive = 1000.0;
+    if (id == 12) emissive = 50.0;
+    if (id == 13) emissive = 1000.0;
+    if (id == 14) emissive = 1000.0;
+    if (id == 15) emissive = 1000.0;
+    if (id == 16) emissive = 1000.0;
+    #endif
+    return emissive;
+}
+
+vec3 emissiveget (int id) {
+    return emissivecol(id) * emissivebright(id);
+}
+
+#define FOCAL 25 //focus distance [1 2 3 4 5 6 7 8 9 10 15 20 25 30 35 40 45 50 60 70 80 90 100 125 150 175 200 225 250 275 300 325 350 375 400 425 450 475 500]
+#define F_STOPS 2.0 //f-stops [0.001 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.25 2.5 2.75 3.0 3.25 3.5 3.75 4.0 4.25 4.5 4.75 5.0 5.5 6.0 6.5 7.0 7.5 8.0 8.5 9.0 9.5 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 22.0 24.0 26.0 28.0 30.0 32.0 36.0 40.0 44.0 48.0 52.0 56.0 60.0 64.0]
+#define AUTOFOCUS 1 //autofocus [0 1]
+
+vec3 proj(mat4 projectionMatrix, vec3 pos) {
+    vec4 homoPos = projectionMatrix * vec4(pos, 1.0);
+    return homoPos.xyz / homoPos.w;
 }
 
 vec3 world(vec2 TexCoords, sampler2D depthtex) {
@@ -117,9 +151,10 @@ vec3 view(vec2 TexCoords, sampler2D depthtex) {
     return proj(gbufferProjectionInverse, ndcPos);
 }
 
-vec3 screen(vec3 world) {
-    vec3 player = world - cameraPosition;
-    vec3 view = (gbufferModelView * vec4(player, 1.0)).xyz;
-    vec3 ndc = proj(gbufferPreviousProjection, view);
-    return ndc * 0.5 + 0.5;
+vec3 view2player (vec3 view) {
+    return (gbufferModelViewInverse * vec4(view, 1.0)).xyz;
+}
+
+vec3 view2world (vec3 view) {
+    return (gbufferModelViewInverse * vec4(view, 1.0)).xyz + cameraPosition;
 }
