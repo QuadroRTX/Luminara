@@ -23,7 +23,6 @@ vec3 eyeCameraPosition = cameraPosition + gbufferModelViewInverse[3].xyz;
 #define BOUNCES 5 //Amount of path tracing bounces [0 1 2 3 4 5 6 7 8 9 10 20 50 100 1000]
 #define SUN_NEE
 #define RUSSIAN_ROULETTE
-#define TEXTURE_SIZE 16 //Texturesize [1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192 16384]
 #define HARDCODED_EMISSIVE 0 //hardcoded emissive [0 1]
 #define GOLDEN_WORLD 0 //golden world [0 1]
 #define ALBEDO_METALS 0 //albedo metals [0 1]
