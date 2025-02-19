@@ -81,7 +81,7 @@ vec3 ptfog (vec3 ro, vec3 rd, float t, inout vec3 col) {
 
         float miephase2 = mphase(mu2) * 4.0 * pi;
         
-        scattering += through * (scatter * mass * miephase) * od * exp(-t * scatter * dens) * t * emissiveget(bid);
+        scattering += through * (scatter * mass * miephase) * exp(-t * scatter * dens) * t * emissiveget(bid);
         //scattering += through * (scatter * mass * miephase2) * od * suncol * t * 2.0 * pi * (1.0 - cos(sunrad)) * (sun.pos == vec3(0.0) ? 1.0 : 0.0);
 
         through *= (scatter * mass * miephase) * od * t;
