@@ -166,7 +166,7 @@ vec3 pt (vec3 ro, vec3 rd) {
 
         float emissive = emissivebright(bid);
         #if HARDCODED_EMISSIVE == 0
-            emissive = (spec.a != 1.0 ? spec.a : 0.0) * 5.0;
+            emissive = (spec.a != 1.0 ? spec.a : 0.0) * 50.0;
         #endif
 
         ret += alb * emissive * through;
@@ -185,7 +185,7 @@ vec3 pt (vec3 ro, vec3 rd) {
 
             #ifdef SUN_NEE
                 trace sun = trace(Voxel(0u, 0u, 0u, 0u), vec3(1.0), vec3(0.0));
-                if (dot(sunrd, norm) > 0.0) sun = rayTrace(ro, sundir);
+                if (dot(sunrd, truenorm) > 0.0) sun = rayTrace(ro, sundir);
 
                 if (sun.pos == vec3(0.0) && (!doSpec || rough > 0.0)) {
                     ret += suncol * (1.0 - cos(sunrad)) * through * max(brdf(alb, rough, metal, vec3(spec.g), truenorm, -rd, sundir), 0.0) * 2.0 * pi;
@@ -244,13 +244,34 @@ vec3 pt (vec3 ro, vec3 rd) {
     return ret;
 }
 
+#define APERTURE_BLADES 6 //blades [0 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
+#define STAR_BOKEH 0 //star bokeh [0 1]
+
 vec2 bokeh () {
 	vec2 rand = rand2F();
 
-	return vec2(cos(rand.x * 2.0 * pi), sin(rand.x * 2.0 * pi)) * sqrt(rand.y);
+    #if APERTURE_BLADES == 0
+        vec2 p = vec2(cos(rand.x * 2.0 * pi), sin(rand.x * 2.0 * pi));
+    #else
+        float blade = rand.x * APERTURE_BLADES;
+        float angle = 2.0 * pi / APERTURE_BLADES;
+
+        vec2 rotated = vec2(cos(floor(blade) * angle), sin(floor(blade) * angle));
+        mat2 rotation = mat2(rotated.y, -rotated.x, rotated.xy);
+
+        #if STAR_BOKEH == 0
+        angle *= 0.5;
+        #endif
+
+        vec2 p = rotation * vec2(cos(angle), sin(angle) * (fract(blade) * 2.0 - 1.0));
+    #endif
+
+    p *= 1.0 - pow(1.0 - sqrt(rand.y), 1.2);
+
+	return p;
 }
 
-vec3 computeThinLensApproximation (out vec3 sensorPosition) {
+vec3 computeThinLensApproximation (out vec3 sensorPosition, inout vec3 brdf) {
     vec2 sensorSize = vec2(0.15) * vec2(viewWidth / viewHeight, 1.0);
     
 	vec2 focalLength = sensorSize * vec2(gbufferProjection[0].x, gbufferProjection[1].y);
@@ -267,7 +288,10 @@ vec3 computeThinLensApproximation (out vec3 sensorPosition) {
     float focalDistance = FOCAL;
     #endif
 
-	vec3 aperturePoint = vec3(bokeh() * apertureRad, 0.0);
+    vec2 bokehPoint = bokeh();
+    //brdf = (sin(bokehPoint.x * 20.0) + sin(bokehPoint.y * 20.0)) > 0.4 ? vec3(2.0) : vec3(0.0);
+
+	vec3 aperturePoint = vec3(bokehPoint * apertureRad, 0.0);
 
 	sensorPosition = (gbufferModelViewInverse * vec4(aperturePoint, 1.0)).xyz + eyeCameraPosition;
 	return mat3(gbufferModelViewInverse) * normalize((ro * focalDistance) - aperturePoint);
@@ -285,10 +309,11 @@ void main() {
     //trace hit = rayTrace(eyeCameraPosition, rd);
 
     vec3 ro = vec3(0.0);
+    vec3 brdf = vec3(1.0);
 
-    rd = computeThinLensApproximation(ro);
+    rd = computeThinLensApproximation(ro, brdf);
 
-    vec3 col = pt(ro, rd);
+    vec3 col = pt(ro, rd) * brdf;
 
     /*
     vec3 truenorm = hit.norm;
@@ -310,6 +335,7 @@ void main() {
 		weight = 0.0;
 	}
 
+    //newCol.rgb = col;
 	newCol.rgb = mix(lastcol.rgb, col, 1.0 / (weight + 1.0));
 	newCol.a = weight;
 
