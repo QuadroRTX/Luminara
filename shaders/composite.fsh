@@ -188,7 +188,7 @@ vec3 pt (vec3 ro, vec3 rd) {
                 if (dot(sunrd, truenorm) > 0.0) sun = rayTrace(ro, sundir);
 
                 if (sun.pos == vec3(0.0) && (!doSpec || rough > 0.0)) {
-                    ret += suncol * (1.0 - cos(sunrad)) * through * max(brdf(alb, rough, metal, vec3(spec.g), truenorm, -rd, sundir), 0.0) * 2.0 * pi;
+                    ret += suncol * (1.0 - cos(sunrad)) * 2.0 * pi * through * max(brdf(alb, rough, metal, vec3(spec.g), truenorm, -rd, sundir) * 2.0 * pi, 0.0);
                 }
             #endif
 
