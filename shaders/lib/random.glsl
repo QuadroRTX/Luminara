@@ -19,17 +19,20 @@ void init_msws(uint64_t seed) {
 #define randF() (float(rand() & 0x00ffffffu) / float(0x00ffffff))
 #define rand2F() (vec2(rand2() & 0x00ffffffu) / float(0x00ffffff))
 
-vec3 randV () {
-    float z = randF() * 2.0 - 1.0;
-    float a = randF() * pi * 2.0;
+vec3 unitVec (vec2 uv) {
+    float a = uv.x * 2.0 * pi;
+    float z = uv.y * 2.0 - 1.0;
     float r = sqrt(1.0 - z * z);
     float x = r * cos(a);
     float y = r * sin(a);
     return vec3(x, y, z);
 }
 
+vec3 randV () {
+    return unitVec(rand2F());
+}
+
 vec3 coneDir(vec3 vector, float angle) {
-    //return vector;
     vec2 xy = rand2F();
     xy.x *= 2.0 * pi;
     float cosAngle = cos(angle);

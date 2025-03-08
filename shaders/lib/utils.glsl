@@ -74,6 +74,18 @@ vec3 rotate(vec3 vec, vec3 from, vec3 to) {
     return quaternionMultiply(quaternionMultiply(quat, vec4(vec, 0)), qInv).xyz;
 }
 
+vec2 RSI (vec3 ro, vec3 rd, vec4 sph) {
+    ro = ro - sph.xyz;
+    float a = sph.a * sph.a;
+    float b = dot(ro, rd);
+    float c = b * b + a - dot(ro, ro);
+
+    if (c < 0.0) return vec2(-1.0);
+
+    c = sqrt(c);
+    return -b + vec2(-c, c);
+}
+
 vec3 emissivecol (int id) {
     vec3 emissive;
     if (id == 3) emissive = vec3(0.95, 0.6, 0.25);

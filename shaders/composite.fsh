@@ -6,7 +6,9 @@
 #include "/lib/importantStuff.glsl"
 #include "/lib/random.glsl"
 #include "/lib/brdf.glsl"
+#include "/lib/phase.glsl"
 #include "/lib/sky.glsl"
+#include "/lib/cie.glsl"
 
 uniform bool notMoving;
 in vec2 texcoords;
@@ -31,7 +33,7 @@ mat3 calculateTBN(vec3 hitNormal) {
 #define SCATTERS 2 //Scatters for volumetrics [1 2 3 4 5]
 #define DENSITY 200 //Density for volumetrics [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 110 120 130 140 150 160 170 180 190 200 225 250 275 300 325 350 375 400 425 450 475 500 550 600 650 700 750 800 850 900 950 1000 1100 1200 1300 1400 1500 1600 1700 1800 1900 2000 2100 2200 2300 2400 2500]
 
-vec3 ptfog (vec3 ro, vec3 rd, float t, inout vec3 col) {
+/*vec3 ptfog (vec3 ro, vec3 rd, float t, inout vec3 col) {
     vec3 through = vec3(1.0);
     vec3 scattering = vec3(0.0);
 
@@ -97,7 +99,7 @@ vec3 ptfog (vec3 ro, vec3 rd, float t, inout vec3 col) {
     }
     
     return scattering;
-}
+}*/
 
 float metal = 0.0;
 
@@ -119,7 +121,16 @@ float fresnel(float n1, float n2, vec3 normal, vec3 incident) {
 
 vec3 pt (vec3 ro, vec3 rd) {
     vec3 sundir = coneDir(sunrd, sunrad);
-    vec3 suncol = vec3(plancks(680.0, 5800.0), plancks(550.0, 5800.0), plancks(440.0, 5800.0)) * lighttrans(ro + vec3(0.0, planetrad, 0.0), sundir);
+
+    float wl = 390.0 + 440.0 * randF();
+
+    float scatterray = BetaR(wl);
+    float scattermie = BetaM(wl, aerosol);
+    float absorbo = ozonefunc(wl);
+    float scattermist = mistfunc(wl).r;
+    vec4 coeff = vec4(scatterray, scattermie, absorbo, scattermist);
+
+    vec3 suncol = coltorgb(plancks(wl, 5800.0) * ratioTrackingEstimator(ro + vec3(0.0, planetrad, 0.0), sundir, coeff), wl);
 
     vec3 ret = vec3(0.0);
     vec3 through = vec3(1.0);
@@ -136,15 +147,15 @@ vec3 pt (vec3 ro, vec3 rd) {
         trace hit = rayTrace(ro, rd);
 
         #if VOLUMETRICS == 1
-        if (bounce == 0) ret += ptfog(ro, rd, (hit.pos != vec3(0.0) ? distance(ro, hit.pos) : 100.0), through);
+        //if (bounce == 0) ret += ptfog(ro, rd, (hit.pos != vec3(0.0) ? distance(ro, hit.pos) : 100.0), through);
         #endif
 
         if (hit.pos == vec3(0.0)) {
             #ifdef SUN_NEE
-                if ((doSpec && rough == 0.0) || bounce == 0) ret += through * sky(ro, rd, vec3(0.0));
-                else ret += through * sky2(ro, rd, vec3(0.0));
+                if ((doSpec && rough == 0.0) || bounce == 0) ret += through * coltorgb(sky(ro, rd, 0.0, wl), wl);
+                else ret += through * coltorgb(sky2(ro, rd, 0.0, wl), wl);
             #else
-                ret += through * sky(ro, rd, vec3(0.0));
+                ret += through * coltorgb(sky(ro, rd, 0.0, wl), wl);
             #endif
             break;
         }
