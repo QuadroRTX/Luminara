@@ -188,7 +188,8 @@ vec3 pt (vec3 ro, vec3 rd) {
                 if (dot(sunrd, truenorm) > 0.0) sun = rayTrace(ro, sundir);
 
                 if (sun.pos == vec3(0.0) && (!doSpec || rough > 0.0)) {
-                    ret += suncol * (1.0 - cos(sunrad)) * 2.0 * pi * through * max(brdf(alb, rough, metal, vec3(spec.g), truenorm, -rd, sundir) * 2.0 * pi, 0.0);
+                    vec3 tempnorm = norm;
+                    ret += suncol * (1.0 - cos(sunrad)) * 2.0 * pi * through * max(brdf(alb, rough, metal, vec3(spec.g), tempnorm, -rd, sundir) * 2.0 * pi, 0.0);
                 }
             #endif
 
@@ -274,7 +275,11 @@ vec2 bokeh () {
 vec3 computeThinLensApproximation (out vec3 sensorPosition, inout vec3 brdf) {
     vec2 sensorSize = vec2(0.15) * vec2(viewWidth / viewHeight, 1.0);
     
+    #ifndef MANUALFOV
 	vec2 focalLength = sensorSize * vec2(gbufferProjection[0].x, gbufferProjection[1].y);
+    #else
+	vec2 focalLength = sensorSize / tan(radians(FOV * 0.5)) / vec2(viewWidth / viewHeight, 1.0);
+    #endif
 	vec2 fovCorrection  = sensorSize  / focalLength;
 	vec2 apertureRad = focalLength / (F_STOPS * 2.0);
 

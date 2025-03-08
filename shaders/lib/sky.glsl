@@ -503,7 +503,7 @@ vec2 RSI (vec3 ro, vec3 rd, vec4 sph) {
 }
 
 float sunrad = 6.963e8 / 1.496e11;
-//float sunrad = radians(1.0);
+//float sunrad = radians(0.5);
 float moonrad = 1.737e6 / 3.844e8;
 
 int odpoints = 6;

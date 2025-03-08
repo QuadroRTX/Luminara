@@ -29,6 +29,7 @@ vec3 randV () {
 }
 
 vec3 coneDir(vec3 vector, float angle) {
+    //return vector;
     vec2 xy = rand2F();
     xy.x *= 2.0 * pi;
     float cosAngle = cos(angle);
