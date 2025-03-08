@@ -130,7 +130,7 @@ vec3 pt (vec3 ro, vec3 rd) {
     float scattermist = mistfunc(wl).r;
     vec4 coeff = vec4(scatterray, scattermie, absorbo, scattermist);
 
-    vec3 suncol = coltorgb(plancks(wl, 5800.0) * ratioTrackingEstimator(ro + vec3(0.0, planetrad, 0.0), sundir, coeff), wl);
+    vec3 suncol = coltorgb(plancks(wl, 5800.0) * ratioTrackingEstimator(ro + vec3(0.0, planetrad * 2.0, 0.0), sundir, coeff), wl);
 
     vec3 ret = vec3(0.0);
     vec3 through = vec3(1.0);
@@ -329,7 +329,10 @@ void main() {
 
     rd = computeThinLensApproximation(ro, brdf);
 
+    //float wl = 390.0 + 440.0 * randF();
+
     vec3 col = pt(ro, rd) * brdf;
+    //vec3 col = coltorgb(sky(ro, rd, 0.0, wl), wl);
 
     /*
     vec3 truenorm = hit.norm;
